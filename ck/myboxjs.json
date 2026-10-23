@@ -1,0 +1,58 @@
+{
+  "id": "anygup.custom.sub",
+  "name": "个人脚本合集",
+  "author": "@AnyGup",
+  "icon": "https://raw.githubusercontent.com/AnyGup/gg/main/icon.png",
+  "repo": "https://github.com/AnyGup/gg",
+  "apps": [
+    {
+      "id": "ysjf",
+      "name": "影视飓风 Club",
+      "keys": ["ysjf_token", "ysjf_extra_data"],
+      "settings": [
+        {
+          "id": "ysjf_token",
+          "name": "签到 Token",
+          "val": "",
+          "type": "textarea",
+          "desc": "自动抓取或手动填写 access_token"
+        },
+        {
+          "id": "ysjf_extra_data",
+          "name": "Extra-Data（风控参数）",
+          "val": "",
+          "type": "textarea",
+          "desc": "自动抓取，通常无需修改"
+        }
+      ],
+      "author": "@AnyGup",
+      "repo": "https://github.com/AnyGup/gg",
+      "script": "https://raw.githubusercontent.com/AnyGup/gg/refs/heads/main/ck/getcookie.js",
+      "icons": [
+        "https://raw.githubusercontent.com/AnyGup/gg/main/icon.png",
+        "https://raw.githubusercontent.com/AnyGup/gg/main/icon.png"
+      ]
+    },
+    {
+      "id": "chery",
+      "name": "奇瑞汽车 App",
+      "keys": ["chery_accounts"],
+      "settings": [
+        {
+          "id": "chery_accounts",
+          "name": "账号列表（JSON）",
+          "val": "[]",
+          "type": "textarea",
+          "desc": "脚本自动写入，建议不要手动修改"
+        }
+      ],
+      "author": "@AnyGup",
+      "repo": "https://github.com/AnyGup/gg",
+      "script": "https://raw.githubusercontent.com/AnyGup/gg/refs/heads/main/ck/getcookie.js",
+      "icons": [
+        "https://raw.githubusercontent.com/AnyGup/gg/main/icon.png",
+        "https://raw.githubusercontent.com/AnyGup/gg/main/icon.png"
+      ]
+    }
+  ]
+}
