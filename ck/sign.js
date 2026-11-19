@@ -1,19 +1,56 @@
-// sign.js (影视飓风 & 美的 综合签到脚本 - 原版逻辑重构)
-const $ = new Env("综合签到");
-let notifyMsg = [];
+// sign.js (影视飓风 & 美的 纯净分离版)
 
-// 获取定时任务传入的参数 (例如 argument=ysjf 或 argument=midea)
-const arg = typeof $environment !== 'undefined' ? $environment : (typeof $argument !== 'undefined' ? $argument : "");
+const $ = new Env("签到脚本");
 
-// ==================== 1. 影视飓风签到 ====================
-async function signYsjf() {
+// 获取传入的参数 (判断要跑哪个)
+// 如果定时任务写了 argument=ysjf，这里就会读到 "ysjf"
+let arg = "";
+if (typeof $argument !== "undefined") {
+    arg = $argument;
+} else if (typeof $environment !== "undefined") {
+    arg = String($environment); 
+}
+
+!(async () => {
+    let notifyMsg = [];
+    let title = "签到结果";
+
+    try {
+        if (arg.includes("ysjf")) {
+            title = "影视飓风签到";
+            await signYsjf(notifyMsg);
+        } else if (arg.includes("midea")) {
+            title = "美的会员签到";
+            await signMidea(notifyMsg);
+        } else {
+            // 如果没有传参（比如你手动点运行），默认两个都跑
+            title = "综合签到(全部)";
+            await signYsjf(notifyMsg);
+            await signMidea(notifyMsg);
+        }
+
+        if (notifyMsg.length > 0) {
+            let body = notifyMsg.join("\n");
+            $notify(title, "", body);
+            console.log(`【${title}】\n${body}`);
+        }
+    } catch (e) {
+        $notify("脚本运行异常", "", String(e));
+    } finally {
+        // 无论是成功还是报错，最后一定会执行这句，彻底告别转圈
+        $done();
+    }
+})();
+
+// ==================== 1. 影视飓风签到逻辑 ====================
+async function signYsjf(msgArray) {
     const token = $prefs.valueForKey("ysjf_token");
     const extraData = $prefs.valueForKey("ysjf_extra_data");
     const kdtId = "149536603";
     const checkinId = "6287727";
 
     if (!token || !extraData) {
-        notifyMsg.push("影视飓风: ❌ 缺失 CK，请先抓包");
+        msgArray.push("影视飓风: ❌ 缺失 CK，请先抓包");
         return;
     }
 
@@ -30,31 +67,29 @@ async function signYsjf() {
     try {
         const response = await $task.fetch({ url, method: "GET", headers });
         const result = JSON.parse(response.body);
-        const msg = result.msg || (result.data && result.data.msg) || "接口无返回信息";
+        const msg = result.msg || (result.data && result.data.msg) || "";
 
         if (result.code === 0 || result.success || (result.data && result.data.success)) {
-            notifyMsg.push(`影视飓风: ✅ 签到成功`);
+            msgArray.push("影视飓风: ✅ 签到成功");
         } else if (msg.includes("已签到") || msg.includes("重复") || msg.includes("无法参与") || msg.includes("最大参与次数")) {
-            notifyMsg.push(`影视飓风: ⚠️ 今日已签到`);
+            msgArray.push("影视飓风: ⚠️ 今日已签到");
         } else {
-            notifyMsg.push(`影视飓风: ❌ ${msg}`);
+            msgArray.push(`影视飓风: ❌ ${msg}`);
         }
     } catch (e) {
-        notifyMsg.push(`影视飓风: ❌ 网络错误`);
+        msgArray.push("影视飓风: ❌ 网络请求异常");
     }
 }
 
-// ==================== 2. 美的会员签到 (完美移植原版逻辑) ====================
-async function signMidea() {
-    // 兼容原版变量名 midea_data 和你之前使用的 MIDEA_COOKIE
+// ==================== 2. 美的会员签到逻辑 ====================
+async function signMidea(msgArray) {
     let mideaData = $prefs.valueForKey("midea_data") || $prefs.valueForKey("MIDEA_COOKIE");
-    
+
     if (!mideaData) {
-        notifyMsg.push("美的会员: ❌ 缺失 CK，请先抓包");
+        msgArray.push("美的会员: ❌ 缺失 CK，请先抓包");
         return;
     }
 
-    // 原版多账号分隔符
     let cookies = mideaData.split("@");
     for (let i = 0; i < cookies.length; i++) {
         let cookie = cookies[i].trim();
@@ -71,9 +106,10 @@ async function signMidea() {
             "Referer": "https://servicewechat.com/wx03925a39ca94b161/409/page-frame.html"
         };
 
-        // 1. 执行签到
-        let signResMsg = "";
+        let signMsg = "";
         let ckStatus = true;
+
+        // 签到
         try {
             let signRes = await $task.fetch({
                 url: "https://mvip.midea.cn/my/score/create_daily_score",
@@ -83,19 +119,19 @@ async function signMidea() {
             let signData = JSON.parse(signRes.body.replace(/\t|\n|\v|\r|\f/g, ''));
             
             if (signData?.errcode == 0) {
-                signResMsg = "✅ 签到成功!";
+                signMsg = "✅ 签到成功";
             } else if (signData?.errcode == 314) {
-                signResMsg = "⚠️ 今日已签到!";
+                signMsg = "⚠️ 今日已签到";
             } else {
-                signResMsg = `❌ 签到失败！${signData?.errMsg || '未知错误'}`;
-                ckStatus = false; // CK 可能失效
+                signMsg = `❌ 失败: ${signData?.errMsg || '未知错误'}`;
+                ckStatus = false;
             }
         } catch (e) {
-            notifyMsg.push(`美的账号${i + 1}: ❌ 签到网络异常`);
-            continue;
+            signMsg = "❌ 签到网络异常";
+            ckStatus = false;
         }
 
-        // 2. 查询积分（如果签到成功或已签到，才去查积分）
+        // 积分查询
         let pointMsg = "";
         if (ckStatus) {
             try {
@@ -108,57 +144,20 @@ async function signMidea() {
                 if (pointData?.errcode == 0) {
                     let grow = pointData?.data?.userinfo?.VipGrow || 0;
                     let score = pointData?.data?.userinfo?.VipScore || 0;
-                    pointMsg = ` | 🧩成长值:${grow} 🎁积分:${score}`;
+                    pointMsg = ` | 🧩${grow} 🎁${score}`;
                 }
-            } catch (e) {
-                pointMsg = " | ⚠️ 积分查询失败";
-            }
+            } catch (e) {}
         }
 
-        notifyMsg.push(`美的账号${i + 1}: ${signResMsg}${pointMsg}`);
-        
-        // 原版防并发延迟 (1000 - 3000 毫秒)
-        let randomDelay = Math.round(Math.random() * 2000 + 1000);
-        await $.wait(randomDelay);
+        msgArray.push(`美的账号${i + 1}: ${signMsg}${pointMsg}`);
+
+        if (i < cookies.length - 1) {
+            await new Promise(r => setTimeout(r, 1500));
+        }
     }
 }
 
-// ==================== 3. 主函数 (根据参数决定跑哪个) ====================
-!(async () => {
-    let title = "签到结果";
-    
-    // 根据传入的参数，决定执行哪部分
-    if (arg.includes("ysjf")) {
-        title = "影视飓风签到";
-        await signYsjf();
-    } else if (arg.includes("midea")) {
-        title = "美的会员签到";
-        await signMidea();
-    } else {
-        // 如果没有传参（比如你手动运行），就两个都签
-        title = "综合签到 (全部)";
-        await signYsjf();
-        await signMidea();
-    }
-
-    if (notifyMsg.length > 0) {
-        let body = notifyMsg.join("\n");
-        $notify(title, "", body);
-        console.log(`【${title}】\n${body}`);
-    }
-
-    $done();
-})();
-
-// ==================== 基础 Env 简易封装 ====================
+// 极简 Env，只为了提供名字
 function Env(name) {
-    return new (class {
-        constructor(name) { this.name = name; }
-        wait(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
-        notify(title, subtitle = '', body = '') {
-            if (typeof $notify !== 'undefined') { $notify(title, subtitle, body); }
-            else if (typeof $notification !== 'undefined') { $notification.post(title, subtitle, body); }
-        }
-        getdata(key) { return $prefs.valueForKey(key); }
-    })();
+    return { name: name };
 }
