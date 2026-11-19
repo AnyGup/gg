@@ -1,11 +1,14 @@
-// ysjf_sign.js (纯净版：仅影视飓风自动签到)
-
-const token = $prefs.valueForKey("ysjf_token") || "921dc772df523293ec9221db399ce8"; 
+// ysjf_sign.js (纯净版：仅影视飓风自动签到，仅读取QX本地缓存)
+const token = $prefs.valueForKey("ysjf_token");
 const kdtId = "149536603";
 const checkinId = "6287727";
+const extraData = $prefs.valueForKey("ysjf_extra_data");
 
-const defaultExtra = '{"is_weapp":1,"sid":"YZ1562791171168223232YZ3dJPc0vh","version":"2.251.7.101","client":"weapp","bizEnv":"wsc","uuid":"tfEGUV3ZozMub8r1792564007210","ftime":1792564007207}';
-const extraData = $prefs.valueForKey("ysjf_extra_data") || defaultExtra;
+if (!token || !extraData) {
+    $notify("影视飓风签到", "配置缺失 ⚠️", "未检测到本地Token或Extra-Data，请先运行抓取脚本获取");
+    $done();
+    return;
+}
 
 const signURL = `https://h5.youzan.com/wscump/checkin/checkinV2.json?checkinId=${checkinId}&app_id=wx92782ef90ebc836d&kdt_id=${kdtId}&access_token=${token}`;
 
