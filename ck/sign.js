@@ -1,4 +1,4 @@
-// sign.js (影视飓风 & 美的 & 杜蕾斯 一键全签纯净版)
+// sign.js (影视飓风 & 美的 & 杜蕾斯 & 海尔 一键全签纯净版)
 
 !(async () => {
     let notifyMsg = [];
@@ -109,7 +109,6 @@
     }
 
     // ==================== 3. 杜蕾斯签到 (含多账号) ====================
-    // 兼容你之前抓取脚本存的 dls_auth 和原版的 dls_data
     let dlsData = $prefs.valueForKey("dls_data") || $prefs.valueForKey("dls_auth");
     
     if (!dlsData) {
@@ -129,7 +128,6 @@
 
             let dlsSignMsg = "";
             
-            // 1. 杜蕾斯签到
             try {
                 let signRes = await $task.fetch({
                     url: "https://vip.ixiliu.cn/mp/sign/applyV2",
@@ -149,7 +147,6 @@
                 continue;
             }
 
-            // 2. 杜蕾斯积分查询
             let dlsPointMsg = "";
             try {
                 let pointRes = await $task.fetch({
@@ -174,13 +171,105 @@
         }
     }
 
-    // ==================== 4. 发送通知并结束 ====================
+    // ==================== 4. 海尔智家签到 (含多账号) ====================
+    // 兼容我们之前抓包脚本存的组合变量 haier_data，或分离的变量
+    let haierData = $prefs.valueForKey("haier_data") || $prefs.valueForKey("haier_token");
+    let haierTokens = [];
+    
+    if (haierData) {
+        haierTokens = haierData.split("@");
+    } else {
+        // 尝试读取分离的 token 和 clientId
+        let accountToken = $prefs.valueForKey("haier_accountToken");
+        let clientId = $prefs.valueForKey("haier_clientId");
+        if (accountToken && clientId) {
+            haierTokens = [`${accountToken}@${clientId}`]; // 统一成一种格式处理
+        }
+    }
+    
+    if (haierTokens.length === 0) {
+        notifyMsg.push("海尔智家: ❌ 缺失 CK，请先抓包");
+    } else {
+        for (let i = 0; i < haierTokens.length; i++) {
+            let rawToken = haierTokens[i].trim();
+            if (!rawToken) continue;
+
+            // 解析 token 和 clientId。支持 "token@clientId" 或 "token&clientId" 格式
+            let parts = rawToken.split(/[@&]/);
+            let accountToken = parts[0];
+            let clientId = parts[1];
+
+            if (!accountToken || !clientId) {
+                notifyMsg.push(`海尔账号${i + 1}: ❌ CK格式错误`);
+                continue;
+            }
+
+            let haierHeaders = {
+                "Host": "mps.haiersmarthomes.com",
+                "Content-Type": "application/json",
+                "appId": "MB-UZHSH-0001",
+                "accountToken": accountToken,
+                "clientId": clientId,
+                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.78(0x18004e33) NetType/5G Language/zh_CN",
+                "Referer": "https://zjrs.haier.net/"
+            };
+
+            let haierSignMsg = "";
+            let haierPointMsg = "";
+
+            // 1. 执行签到
+            try {
+                let signRes = await $task.fetch({
+                    url: "https://mps.haiersmarthomes.com/api-gw/wisdomHouseActivity/sign/signIn",
+                    method: "POST",
+                    headers: haierHeaders,
+                    body: JSON.stringify({ "sourceClient": 1 }) // 海尔签到需要传这个 body
+                });
+                let signData = JSON.parse(signRes.body);
+                
+                // 海尔成功返回码通常是 '00000'
+                if (signData?.code === '00000' || signData?.retCode === '00000') {
+                    let signDays = signData?.data?.signDays || "?";
+                    haierSignMsg = `✅ 签到成功 (累计${signDays}天)`;
+                } else if (signData?.msg?.includes("已签到") || signData?.retMsg?.includes("已签到")) {
+                    haierSignMsg = "⚠️ 今日已签到";
+                } else {
+                    haierSignMsg = `❌ 失败: ${signData?.msg || signData?.retMsg || '未知错误'}`;
+                }
+            } catch (e) {
+                haierSignMsg = "❌ 签到网络异常";
+                notifyMsg.push(`海尔账号${i + 1}: ${haierSignMsg}`);
+                continue;
+            }
+
+            // 2. 查询积分 (尝试调用，若失败不影响主流程)
+            try {
+                let pointRes = await $task.fetch({
+                    url: "https://mps.haiersmarthomes.com/api-gw/wisdomHouseActivity/sign/getSignInfo",
+                    method: "GET",
+                    headers: haierHeaders
+                });
+                let pointData = JSON.parse(pointRes.body);
+                if (pointData?.code === '00000' || pointData?.retCode === '00000') {
+                    let totalPoints = pointData?.data?.totalPoint || pointData?.data?.point || 0;
+                    haierPointMsg = ` | 🎁总积分:${totalPoints}`;
+                }
+            } catch (e) {} // 静默失败
+
+            notifyMsg.push(`海尔账号${i + 1}: ${haierSignMsg}${haierPointMsg}`);
+
+            if (i < haierTokens.length - 1) {
+                await new Promise(r => setTimeout(r, 1500));
+            }
+        }
+    }
+
+    // ==================== 5. 发送通知并结束 ====================
     if (notifyMsg.length > 0) {
         let body = notifyMsg.join("\n");
         $notify("综合签到结果", "每天进步一点点", body);
         console.log(`【综合签到结果】\n${body}`);
     }
     
-    // 绝对保证脚本结束，不再转圈
     $done();
 })();
