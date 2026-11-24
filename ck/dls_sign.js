@@ -1,14 +1,13 @@
-// dls_sign.js (杜蕾斯独立签到脚本)
+// dls_sign.js (基于 mall-api 新接口完美版)
 
 !(async () => {
     let notifyMsg = [];
-    // 兼容你本地存的变量名
-    let dlsData = $prefs.valueForKey("dls_data") || $prefs.valueForKey("dls_auth");
+    // 优先读取我们之前抓取的 Authorization
+    let dlsData = $prefs.valueForKey("dls_auth") || $prefs.valueForKey("dls_data");
     
     if (!dlsData) {
         $notify("杜蕾斯签到", "", "❌ 缺失 CK，请先抓包");
-        $done();
-        return;
+        $done(); return;
     }
 
     let dlsTokens = dlsData.split("@");
@@ -16,52 +15,66 @@
         let token = dlsTokens[i].trim();
         if (!token) continue;
 
+        // 完全按照你截图里的域名和请求头构造
         let dlsHeaders = {
-            "Host": "vip.ixiliu.cn",
+            "Host": "mall-api.ixiliu.cn",
             "content-type": "application/json;charset=utf-8",
-            "User-Agent": "Mozilla/5.0 (iPad; CPU OS 16_6_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.47(0x18002f28) NetType/WIFI Language/zh_CN",
-            "sid": "10006",
-            "Access-Token": token,
+            "Authorization": token, // 你之前抓取到的那个 32 位字符串
+            "tenant-id": "1",       // 之前抓包看到有这个
+            "terminal": "10",       // 之前抓包看到有这个
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.47(0x18002f28) NetType/WIFI Language/zh_CN",
             "Accept": "*/*"
         };
 
         let dlsSignMsg = "";
         try {
-            // 保持之前验证通过的 GET 请求
+            // 使用第 572 条抓包的真实接口
             let signRes = await $task.fetch({
-                url: "https://vip.ixiliu.cn/mp/sign/applyV2",
-                method: "GET",
-                headers: dlsHeaders
+                url: "https://mall-api.ixiliu.cn/app-api/member/sign-in/record/create",
+                method: "POST",
+                headers: dlsHeaders,
+                body: JSON.stringify({}) // 通常 create 接口发空 JSON 即可
             });
-            
+
+            // 安全解析
+            let signData;
             try {
-                let signData = JSON.parse(signRes.body);
-                if (signData?.code === -1 || signData?.msg?.includes("已签到")) {
-                    dlsSignMsg = "⚠️ 今日已签到";
-                } else if (signData?.status === 200 || signData?.code === 0) {
-                    dlsSignMsg = "✅ 签到成功";
-                } else {
-                    dlsSignMsg = `❌ 失败: ${signData?.msg || '未知错误'}`;
-                }
+                signData = JSON.parse(signRes.body);
             } catch (parseError) {
-                dlsSignMsg = `❌ 接口异常(非JSON)`;
+                let preview = (signRes.body || "").substring(0, 30).replace(/\n/g, ' ');
+                dlsSignMsg = `❌ 返回非JSON: ${preview}...`;
+                notifyMsg.push(`杜蕾斯账号${i + 1}: ${dlsSignMsg}`);
+                continue;
+            }
+
+            // 解析返回结果（微服务通常 code 为 0 或 200 表示成功）
+            let code = signData?.code ?? signData?.status ?? signData?.errCode;
+            let msg = signData?.msg || signData?.message || signData?.errMsg || "";
+
+            if (code === 0 || code === 200 || String(code) === '0') {
+                dlsSignMsg = "✅ 签到成功";
+            } else if (msg.includes("已签到") || msg.includes("重复")) {
+                dlsSignMsg = "⚠️ 今日已签到";
+            } else {
+                // 打印具体的错误提示，方便排查
+                dlsSignMsg = `❌ 失败: ${msg || '未知错误'}`;
             }
         } catch (e) {
-            dlsSignMsg = `❌ 网络异常 (${String(e).substring(0, 30)})`;
+            // 彻底解决 [object Object] 报错，提取真实的错误信息
+            let errStr = "";
+            if (e.error) errStr = e.error;
+            else if (e.message) errStr = e.message;
+            else errStr = JSON.stringify(e);
+            dlsSignMsg = `❌ 网络异常: ${errStr.substring(0, 50)}`;
         }
         
         notifyMsg.push(`杜蕾斯账号${i + 1}: ${dlsSignMsg}`);
-        
-        // 多账号延迟
-        if (i < dlsTokens.length - 1) {
-            await new Promise(r => setTimeout(r, 1500));
-        }
+        if (i < dlsTokens.length - 1) await new Promise(r => setTimeout(r, 1500));
     }
 
     if (notifyMsg.length > 0) {
         $notify("杜蕾斯签到", "", notifyMsg.join("\n"));
         console.log(`【杜蕾斯签到】\n${notifyMsg.join("\n")}`);
     }
-    
     $done();
 })();
