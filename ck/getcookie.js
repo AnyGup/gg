@@ -9,7 +9,7 @@ if (url.includes("access_token")) {
         $prefs.setValueForKey(tokenMatch[1], "ysjf_token");
         $notify("影视飓风抓取", "Token 抓取成功 ✅", tokenMatch[1]);
     }
-    const extraData = $request.headers["Extra-Data"] || $request.headers["extra-data"];
+    const extraData = headers["Extra-Data"] || headers["extra-data"];
     if (extraData) {
         $prefs.setValueForKey(extraData, "ysjf_extra_data");
     }
@@ -20,41 +20,42 @@ if (url.includes("mvip.midea.cn")) {
     const cookie = headers["Cookie"] || headers["cookie"];
     if (cookie) {
         $prefs.setValueForKey(cookie, "MIDEA_COOKIE");
-        $prefs.setValueForKey(cookie, "midea_data"); // 兼容原版脚本的变量名
+        $prefs.setValueForKey(cookie, "midea_data");
         $notify("美的会员", "Cookie 抓取成功 ✅", cookie.substring(0, 30) + "...");
     }
 }
 
-// ==================== 3. 杜蕾斯小程序 Token 抓取 ====================
-if (url.includes("ixiliu.cn")) {
+// ==================== 3. 杜蕾斯小程序 Token 抓取 (升级版) ====================
+// 精准匹配新的 mall-api 域名
+if (url.includes("mall-api.ixiliu.cn")) {
     const auth = headers["Authorization"] || headers["authorization"];
-    // 有赞接口有时也用 access-token
-    const accessToken = headers["Access-Token"] || headers["access-token"];
-    const finalToken = auth || accessToken;
     
-    if (finalToken) {
-        $prefs.setValueForKey(finalToken, "dls_auth");
-        $prefs.setValueForKey(finalToken, "dls_data"); // 兼容原版 Levi 脚本
-        $notify("杜蕾斯抓取", "Token 抓取成功 ✅", `Auth: ${finalToken.substring(0, 15)}...`);
+    if (auth) {
+        // 核心 Authorization
+        $prefs.setValueForKey(auth, "dls_auth");
+        $prefs.setValueForKey(auth, "dls_data"); // 兼容原版变量名
+        
+        // 顺手把辅助参数也存下来
+        const tenantId = headers["tenant-id"] || headers["Tenant-Id"] || "1";
+        const terminal = headers["terminal"] || "10";
+        $prefs.setValueForKey(tenantId, "dls_tenant_id");
+        $prefs.setValueForKey(terminal, "dls_terminal");
+
+        $notify("杜蕾斯抓取", "Token 抓取成功 ✅", `Auth: ${auth.substring(0, 15)}...`);
+        console.log(`【杜蕾斯抓取】\nAuthorization: ${auth}\nTenant-ID: ${tenantId}\nTerminal: ${terminal}`);
     }
 }
 
 // ==================== 4. 海尔智家 Token 抓取 ====================
 if (url.includes("zj.haier.net")) {
-    // 优先获取 accountToken，如果没有则尝试 accessToken
     const haierToken = headers["accountToken"] || headers["accounttoken"] || headers["accessToken"];
     const clientId = headers["clientId"] || headers["clientid"];
 
     if (haierToken && clientId) {
-        // 分别存储
-        $prefs.setValueForKey(haierToken, "haier_accountToken");
-        $prefs.setValueForKey(clientId, "haier_clientId");
-        
-        // 组合存储，方便部分只认单一变量的脚本直接读取 (格式: accountToken@clientId)
+        // 组合存储，格式: accountToken@clientId
         const combinedData = `${haierToken}@${clientId}`;
         $prefs.setValueForKey(combinedData, "haier_data");
-        $prefs.setValueForKey(combinedData, "haier_token");
-
+        
         $notify("海尔智家", "CK 抓取成功 ✅", `Token: ${haierToken.substring(0, 10)}...`);
         console.log(`【海尔智家抓取】\nAccountToken: ${haierToken}\nClientId: ${clientId}`);
     }
